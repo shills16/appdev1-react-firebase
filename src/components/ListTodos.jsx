@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react'
 import { MdDelete } from "react-icons/md";
 import { MdAdd } from "react-icons/md";
+import { db } from "../firebase.js";
+import { collection, addDoc, getDocs, updateDoc, doc, deleteDoc, getDocsFromServer } from 'firebase/firestore';
 
 const ListTodos = ({ user }) => {
     const [loading, setLoading] = useState(true)
     const [newTodo, setNewTodo] = useState('')
     const [todos, setTodos] = useState([])
 
-    const fetchTodos = async (Limit=5) => {
+    const fetchTodos = async () => {
         try {
-            const response = await fetch('https://jsonplaceholder.typicode.com/todos?_limit=5{Limit}')
-            const data = await response.json()
-            setTodos(data)
+            const collectionRef = collection(db, 'todos')
+            const querySnapshot = await getDocs(collectionRef)
+            const todos = querySnapshot.docs.map((doc) => ({
+                id: doc.id,
+                ...doc.data()
+            }))
+            setTodos(todos)
             setLoading(false)
         } catch (error) {
             console.error(error.message)
@@ -23,19 +29,32 @@ const ListTodos = ({ user }) => {
         fetchTodos()
     }, [])
   
-    const handleToggleTodo = (id) => {
+    const handleToggleTodo = async (id, completed) => {
+        const todoRef = doc(db, 'todos', id)
+        await updateDoc(todoRef, {
+            completed: !completed
+        }
+        )
+
       setTodos(todos.map(todo => (
         todo.id === id ? {...todo, completed: !todo.completed } : todo 
       )))
     }
   
-    const handleDeleteTodo = (id) => {
+    const handleDeleteTodo = async (id) => {
+        const todoRef = doc(db, 'todos', id)
+        await deleteDoc(todoRef)
       setTodos(todos.filter(todo => todo.id !== id)) 
     } 
   
-    const handleNewTodo = () => {
-      setTodos([...todos, {id: todos.length + 1, title: newTodo, completed: false}])
-      setNewTodo('')
+    const handleNewTodo = async () => {
+        const collectionRef = collection(db, 'todos')
+        const todoRef = await addDoc(collectionRef, {
+            title: newTodo,
+            completed: false
+        })
+        setTodos([...todos, {id: todoRef.id, title: newTodo, completed: false}])
+        setNewTodo('')
     }
 
     if (loading) return <>Loading...</>
@@ -49,7 +68,7 @@ const ListTodos = ({ user }) => {
                 <ul> 
                     {todos.map(todo => ( 
                     <li key={todo.id}>
-                    <input type="checkbox" checked={todo.completed} onChange={() => handleToggleTodo(todo.id)} />
+                    <input type="checkbox" checked={todo.completed} onChange={() => handleToggleTodo(todo.id, todo.completed)} />
                     {todo.completed ? <s>{todo.title}</s> : todo.title} {/* strike through */} 
                     <button onClick={() => handleDeleteTodo(todo.id)}><MdDelete /> delete</button>
                     </li>
